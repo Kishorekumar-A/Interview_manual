@@ -1287,7 +1287,6 @@ function InterviewRoom({ room, onLeave }) {
               <div className="result-item"><span className="result-label">Speech Detection</span><span className="result-value">{aiResults.speech ? "Detected" : "None"}</span></div>
               <div className="result-item"><span className="result-label">Lip Sync</span><span className="result-value">{aiResults.lipsync ? "Good" : "Poor"}</span></div>
               <div className="result-item"><span className="result-label">Background Voice</span><span className="result-value">{aiResults.bg_voice ? "Detected" : "None"}</span></div>
-              <div className="result-item"><span className="result-label">Mouth Activity</span><span className="result-value">{aiResults.mouth_ratio.toFixed(3)}</span></div>
               <div className="result-item"><span className="result-label">Face Verification</span><span className="result-value">{referenceFaceSet ? "Match" : "Not Match"}</span></div>
             </div>
             {aiResults.face_alert && (
