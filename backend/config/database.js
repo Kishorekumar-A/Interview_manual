@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const connectDatabase = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/ai_interview', {
+    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://kishorekumar30501_db_user:OuZZBVql0AXTpaff@cluster0.pbf872q.mongodb.net/', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
