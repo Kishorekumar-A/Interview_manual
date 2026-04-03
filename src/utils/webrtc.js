@@ -53,7 +53,7 @@ export class WebRTCSignaling {
       try {
         if (this.ws) this.ws.close();
         
-        const wsUrl = `ws://localhost:8081`;
+        const wsUrl = import.meta.env.VITE_SIGNALING_URL || 'ws://localhost:8081';
         console.log(`🔗 ${this.role} connecting to signaling: ${wsUrl}`);
         this.ws = new WebSocket(wsUrl);
         

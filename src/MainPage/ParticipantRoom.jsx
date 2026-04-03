@@ -31,8 +31,8 @@ function ParticipantRoom({ room, onLeave }) {
   const wsRef = useRef(null);
   const webrtcManagerRef = useRef(null);
 
-  const PYTHON_API_URL = 'http://localhost:8001';
-  const NODE_API_URL = 'http://localhost:8000/api';
+  const PYTHON_API_URL = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8001';
+  const NODE_API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api';
 
   // Enhanced connection status management
   const updateConnectionStatus = (status) => {
@@ -167,7 +167,7 @@ function ParticipantRoom({ room, onLeave }) {
     try {
       if (wsRef.current) wsRef.current.close();
       
-      const ws = new WebSocket("ws://localhost:8001/ws");
+      const ws = new WebSocket(import.meta.env.VITE_PYTHON_WS_URL || "ws://localhost:8001/ws");
       
       ws.onopen = () => {
         console.log("✅ Participant WebSocket connected to AI backend");
@@ -281,14 +281,11 @@ function ParticipantRoom({ room, onLeave }) {
       if (webrtcManagerRef.current) {
         await webrtcManagerRef.current.connect();
         await webrtcManagerRef.current.setLocalStream(stream);
-        
-        webrtcManagerRef.current.createDataChannel('chat', {
-          ordered: true
-        });
+        // Note: data channel is handled via ondatachannel event for participants
       }
       
       connectWebSocket();
-      await createSession();
+      createSession().catch(err => console.warn('⚠️ Session creation failed, continuing:', err));
       
       console.log('✅ Camera started successfully');
       setIsConnecting(false);
@@ -468,7 +465,10 @@ function ParticipantRoom({ room, onLeave }) {
   // Session management
   const createSession = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem('interviewUser') || '{}');
+      const userRaw = localStorage.getItem('interviewUser');
+      const user = userRaw ? JSON.parse(userRaw) : {};
+      // Support both user.id and user._id (MongoDB ObjectId)
+      const userId = user?.id || user?._id || `participant-${Date.now()}`;
       const sessionId = `session-${room.id}-participant-${Date.now()}`;
       
       const response = await fetch(`${NODE_API_URL}/detections/session/start`, {
@@ -477,10 +477,16 @@ function ParticipantRoom({ room, onLeave }) {
         body: JSON.stringify({
           sessionId: sessionId,
           roomId: room.id,
-          userId: user.id || 'participant',
+          userId: userId,
           userType: 'participant'
         })
       });
+
+      if (!response.ok) {
+        console.warn('⚠️ Session start returned non-OK status:', response.status, '— continuing anyway');
+        setCurrentSessionId(sessionId);
+        return sessionId;
+      }
       
       const result = await response.json();
       if (result.success) {
@@ -488,12 +494,15 @@ function ParticipantRoom({ room, onLeave }) {
         setCurrentSessionId(sessionId);
         return sessionId;
       } else {
-        console.error('❌ Failed to create participant session:', result.message);
-        return null;
+        console.warn('⚠️ Session warning:', result.message, '— continuing anyway');
+        setCurrentSessionId(sessionId);
+        return sessionId;
       }
     } catch (error) {
-      console.error('❌ Error creating participant session:', error);
-      return null;
+      console.warn('⚠️ Session creation error (non-fatal):', error.message);
+      const fallbackId = `session-${room.id}-participant-${Date.now()}`;
+      setCurrentSessionId(fallbackId);
+      return fallbackId;
     }
   };
 

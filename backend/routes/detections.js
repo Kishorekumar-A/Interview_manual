@@ -32,17 +32,15 @@ router.post('/save', async (req, res) => {
     
     console.log('✅ Detection saved successfully with ID:', detection._id);
 
-    // Update session statistics
+    // Update session statistics (only fields that exist in schema)
     await Session.findOneAndUpdate(
       { sessionId: detectionData.sessionId },
       { 
         $inc: { 
-          'statistics.totalDetections': 1,
-          'statistics.eyeMovements': detectionData.eye_moves || 0,
-          'statistics.facesDetected': detectionData.faces || 0
+          'statistics.totalDetections': 1
         },
         $set: {
-          'statistics.lastDetection': new Date()
+          'statistics.averageAttentionScore': 0 // computed on report generation
         }
       }
     );
@@ -77,12 +75,14 @@ router.post('/session/start', async (req, res) => {
       });
     }
 
-    // Check if session already exists
+    // If session already exists, return it as success (idempotent)
     const existingSession = await Session.findOne({ sessionId });
     if (existingSession) {
-      return res.status(400).json({
-        success: false,
-        message: 'Session already exists'
+      console.log('⚠️ Session already exists, returning existing:', sessionId);
+      return res.json({
+        success: true,
+        message: 'Session already exists',
+        session: existingSession
       });
     }
 
@@ -93,9 +93,9 @@ router.post('/session/start', async (req, res) => {
       userType,
       statistics: {
         totalDetections: 0,
-        eyeMovements: 0,
-        facesDetected: 0,
-        lastDetection: null
+        averageAttentionScore: 0,
+        averageEmotionScore: 0,
+        alertCount: 0
       }
     });
 

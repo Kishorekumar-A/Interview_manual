@@ -52,8 +52,8 @@ function InterviewRoom({ room, onLeave }) {
   const frameIntervalRef = useRef(null);
   const webrtcManagerRef = useRef(null);
 
-  const PYTHON_API_URL = 'http://localhost:8001';
-  const NODE_API_URL = 'http://localhost:8000/api';
+  const PYTHON_API_URL = import.meta.env.VITE_PYTHON_API_URL || 'http://localhost:8001';
+  const NODE_API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api';
 
   // Enhanced connection status management
   const updateConnectionStatus = (status) => {
@@ -256,7 +256,7 @@ function InterviewRoom({ room, onLeave }) {
         wsRef.current.close();
       }
       
-      const ws = new WebSocket("ws://localhost:8001/ws");
+      const ws = new WebSocket(import.meta.env.VITE_PYTHON_WS_URL || "ws://localhost:8001/ws");
       
       ws.onopen = () => {
         console.log("✅ Interviewer connected to AI WebSocket");
@@ -360,18 +360,15 @@ function InterviewRoom({ room, onLeave }) {
       setIsMicOn(true);
       
       // Initialize WebRTC manager and connect to signaling
+      // Note: data channel is created inside createPeerConnection() automatically for interviewers
       initializeWebRTCManager();
       if (webrtcManagerRef.current) {
         await webrtcManagerRef.current.connect();
         await webrtcManagerRef.current.setLocalStream(stream);
-        
-        webrtcManagerRef.current.createDataChannel('chat', {
-          ordered: true
-        });
       }
       
-      // Create session after media is ready
-      await createSession();
+      // Create session after media is ready (non-blocking — don't fail camera if this fails)
+      createSession().catch(err => console.warn('⚠️ Session creation failed, continuing:', err));
       
       console.log('✅ Interviewer camera started successfully');
       setIsConnecting(false);
@@ -526,11 +523,10 @@ function InterviewRoom({ room, onLeave }) {
   // Create session with proper error handling
   const createSession = async () => {
     try {
-      const user = JSON.parse(localStorage.getItem('interviewUser'));
-      if (!user) {
-        console.error('No user found');
-        return null;
-      }
+      const userRaw = localStorage.getItem('interviewUser');
+      const user = userRaw ? JSON.parse(userRaw) : null;
+      // Support both user.id and user._id (MongoDB ObjectId)
+      const userId = user?.id || user?._id || `interviewer-${Date.now()}`;
       
       const sessionId = `session-${room.id}-interviewer-${Date.now()}`;
       const response = await fetch(`${NODE_API_URL}/detections/session/start`, {
@@ -539,11 +535,20 @@ function InterviewRoom({ room, onLeave }) {
         body: JSON.stringify({
           sessionId: sessionId,
           roomId: room.id,
-          userId: user.id,
+          userId: userId,
           userType: 'interviewer'
         })
       });
       
+      if (!response.ok) {
+        const errText = await response.text();
+        console.warn('⚠️ Session start returned non-OK status:', response.status, errText);
+        // Still track session locally so the interview can proceed
+        setCurrentSessionId(sessionId);
+        setSessionStartTime(new Date());
+        return sessionId;
+      }
+
       const result = await response.json();
       if (result.success) {
         console.log('✅ Interviewer session created:', sessionId);
@@ -551,12 +556,18 @@ function InterviewRoom({ room, onLeave }) {
         setSessionStartTime(new Date());
         return sessionId;
       } else {
-        console.error('❌ Failed to create interviewer session:', result.message);
-        return null;
+        console.warn('⚠️ Session creation warning:', result.message, '— continuing anyway');
+        setCurrentSessionId(sessionId);
+        setSessionStartTime(new Date());
+        return sessionId;
       }
     } catch (error) {
-      console.error('❌ Error creating interviewer session:', error);
-      return null;
+      console.warn('⚠️ Session creation error (non-fatal):', error.message);
+      // Generate a local session ID so interview can still proceed
+      const fallbackId = `session-${room.id}-interviewer-${Date.now()}`;
+      setCurrentSessionId(fallbackId);
+      setSessionStartTime(new Date());
+      return fallbackId;
     }
   };
 
