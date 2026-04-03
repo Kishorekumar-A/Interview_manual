@@ -24,13 +24,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/detections', detectionRoutes);
 
+// Disable Mongoose query buffering — queries fail fast if DB isn't connected
+mongoose.set('bufferCommands', false);
+
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/interview-app', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('Connected to MongoDB'))
-.catch(err => console.error('MongoDB connection error:', err));
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('✅ MongoDB Connected'))
+  .catch(err => {
+    console.error('❌ MongoDB connection error:', err.message);
+    process.exit(1); // crash fast so Render can show real error and restart
+  });
 
 // WebSocket Server for real-time AI detection data
 const wss = new WebSocketServer({ server });
