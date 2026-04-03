@@ -51,7 +51,9 @@ wss.on('connection', (ws) => {
     console.log('WebSocket connection closed');
   });
 });
-
+app.get("/", (req, res) => {
+  res.send("Backend is running 🚀");
+});
 const PORT = process.env.PORT || 8000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
